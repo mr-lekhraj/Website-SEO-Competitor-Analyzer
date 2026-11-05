@@ -23,6 +23,11 @@ def test_gsc_requires_query_column():
         parse_gsc_csv(BytesIO(b"Clicks,Impressions\n1,10\n"))
 
 
+def test_keyword_export_is_not_misread_as_gsc():
+    with pytest.raises(ValueError):
+        parse_gsc_csv(BytesIO(b"keyword,intent,source\nmolarity calculator,Mixed,Seed keyword\n"))
+
+
 def test_api_rows_normalization():
     result = gsc_api_rows_to_frame([{"keys": ["molarity", "https://site.test/"], "clicks": 2, "impressions": 20, "ctr": .1, "position": 3}])
     assert result.iloc[0]["query"] == "molarity"
