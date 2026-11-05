@@ -246,10 +246,11 @@ def safe_fetch(
                 content_length = response.headers.get("Content-Length")
                 if content_length:
                     try:
-                        if int(content_length) > max_bytes:
-                            raise URLSafetyError("The web page exceeds the allowed response size.")
+                        declared_size = int(content_length)
                     except ValueError:
-                        pass
+                        declared_size = None
+                    if declared_size is not None and declared_size > max_bytes:
+                        raise URLSafetyError("The web page exceeds the allowed response size.")
 
                 body = bytearray()
                 for chunk in response.iter_content(chunk_size=65536):
