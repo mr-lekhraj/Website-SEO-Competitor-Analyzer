@@ -1,12 +1,11 @@
 """Google Search Console CSV normalization helpers."""
 from __future__ import annotations
-
 import re
 from io import BytesIO, StringIO
 import pandas as pd
 
 ALIASES = {
-    "query": {"query", "queries", "top queries", "search query", "keyword"},
+    "query": {"query", "queries", "top queries", "search query"},
     "page": {"page", "pages", "top pages", "landing page", "url", "top url"},
     "clicks": {"clicks", "click"},
     "impressions": {"impressions", "impression"},
@@ -27,12 +26,7 @@ def _numeric(series: pd.Series) -> pd.Series:
 
 
 def parse_gsc_csv(file_obj) -> pd.DataFrame:
-    """Read common GSC Queries / Pages exports into normalized query-page metrics.
-
-    Required column: Query (or Top queries). Clicks, impressions, CTR and position
-    are optional. CTR is normalized to a 0..1 fraction. If a page column exists,
-    rows remain query/page pairs so cannibalization checks can be performed.
-    """
+    """Normalize standard GSC Queries and query+page CSV exports."""
     if hasattr(file_obj, "read"):
         raw = file_obj.read()
         frame = pd.read_csv(StringIO(raw)) if isinstance(raw, str) else pd.read_csv(BytesIO(raw))
@@ -40,7 +34,6 @@ def parse_gsc_csv(file_obj) -> pd.DataFrame:
         frame = pd.read_csv(file_obj, encoding="utf-8-sig")
     if frame.empty:
         raise ValueError("The uploaded CSV contains no data rows.")
-
     rename = {}
     for column in frame.columns:
         key = _header_key(column)
@@ -50,8 +43,7 @@ def parse_gsc_csv(file_obj) -> pd.DataFrame:
                 break
     frame = frame.rename(columns=rename)
     if "query" not in frame.columns:
-        raise ValueError("Could not find a query column. Expected 'Top queries', 'Queries' or 'Query'.")
-
+        raise ValueError("Could not find a Search Console query column. Expected 'Top queries', 'Queries' or 'Query'.")
     for column in ("page", "clicks", "impressions", "ctr", "position"):
         if column not in frame.columns:
             frame[column] = None
@@ -64,7 +56,6 @@ def parse_gsc_csv(file_obj) -> pd.DataFrame:
         frame["ctr"] = frame["ctr"] / 100.0
     if frame.empty:
         raise ValueError("No valid search queries were found in the CSV.")
-
     result = frame.groupby(["query", "page"], dropna=False, as_index=False).agg(
         clicks=("clicks", "sum"),
         impressions=("impressions", "sum"),
