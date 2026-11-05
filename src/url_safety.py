@@ -175,11 +175,28 @@ class _PinnedHTTPSConnectionPool(HTTPSConnectionPool):
 
 
 class _PinnedPoolManager(PoolManager):
-    pool_classes_by_scheme = {
-        **pool_classes_by_scheme,
-        "http": _PinnedHTTPConnectionPool,
-        "https": _PinnedHTTPSConnectionPool,
-    }
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # PoolManager.__init__ assigns the module defaults to each instance,
+        # so install our custom connection pools after calling super().
+        self.pool_classes_by_scheme = {
+            **self.pool_classes_by_scheme,
+            "http": _PinnedHTTPConnectionPool,
+            "https": _PinnedHTTPSConnectionPool,
+        }
+
+    def connection_from_context(self, request_context):
+        # pinned_ip is required when constructing a connection pool, but it is
+        # not a PoolKey field. Exclude it only from the cache key while keeping
+        # it in the original context passed to _new_pool().
+        key_context = request_context.copy()
+        key_context.pop("pinned_ip", None)
+        scheme = key_context["scheme"].lower()
+        key_constructor = self.key_fn_by_scheme.get(scheme)
+        if key_constructor is None:
+            raise ValueError(f"Unsupported URL scheme: {scheme}")
+        pool_key = key_constructor(key_context)
+        return self.connection_from_pool_key(pool_key, request_context=request_context)
 
 
 class _PinnedHTTPAdapter(HTTPAdapter):
