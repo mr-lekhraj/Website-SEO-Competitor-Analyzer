@@ -44,7 +44,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_gsc_project_import ON gsc_query_pages(project_id, import_id);
         CREATE INDEX IF NOT EXISTS idx_gsc_query ON gsc_query_pages(project_id, query);
         """)
-        # Migrate existing deployed databases without deleting existing project data.
         _ensure_columns(conn, "keywords", {
             "cluster": "TEXT DEFAULT ''",
             "target_url": "TEXT DEFAULT ''",
@@ -90,6 +89,24 @@ def get_keywords(project_id):
             "SELECT keyword,intent,source,cluster,target_url,search_volume,keyword_difficulty,cpc FROM keywords WHERE project_id=? ORDER BY cluster,keyword",
             (project_id,)
         )]
+
+
+def count_legacy_keyword_ideas(project_id):
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS total FROM keywords WHERE project_id=? AND source='Modifier expansion'",
+            (project_id,)
+        ).fetchone()
+    return int(row["total"])
+
+
+def remove_legacy_keyword_ideas(project_id):
+    with connect() as conn:
+        cursor = conn.execute(
+            "DELETE FROM keywords WHERE project_id=? AND source='Modifier expansion'",
+            (project_id,)
+        )
+    return cursor.rowcount
 
 
 def save_keyword_mappings(project_id, rows):
