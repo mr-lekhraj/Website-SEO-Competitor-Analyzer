@@ -1,4 +1,5 @@
 import os
+from datetime import date, timedelta
 
 
 def _setting(name, default=None):
@@ -9,47 +10,43 @@ def _setting(name, default=None):
         if value not in (None, ""):
             return value
     except Exception:
-        # Streamlit secrets may be unavailable during local tests or CLI use.
         pass
     return os.getenv(name, default)
 
 
-def load_gsc_rows(site_url):
+def load_gsc_rows(site_url, start_date=None, end_date=None, property_id=None, row_limit=25000):
     credential_path = _setting("GOOGLE_APPLICATION_CREDENTIALS")
     service_account_info = _setting("gcp_service_account")
     if not credential_path and not service_account_info:
         return [], (
-            "GSC is not configured. Upload a CSV export, set "
-            "GOOGLE_APPLICATION_CREDENTIALS locally, or add a [gcp_service_account] "
-            "object to Streamlit secrets."
+            "GSC is not configured. Upload a CSV export, set GOOGLE_APPLICATION_CREDENTIALS locally, "
+            "or add a [gcp_service_account] object to Streamlit secrets."
         )
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-
         scopes = ["https://www.googleapis.com/auth/webmasters.readonly"]
         if service_account_info:
-            credentials = service_account.Credentials.from_service_account_info(
-                dict(service_account_info), scopes=scopes
-            )
+            credentials = service_account.Credentials.from_service_account_info(dict(service_account_info), scopes=scopes)
         else:
-            credentials = service_account.Credentials.from_service_account_file(
-                credential_path, scopes=scopes
-            )
-
+            credentials = service_account.Credentials.from_service_account_file(credential_path, scopes=scopes)
         service = build("searchconsole", "v1", credentials=credentials, cache_discovery=False)
-        # The property can be overridden for Domain properties, e.g. sc-domain:example.com.
-        property_id = _setting("GSC_PROPERTY", site_url)
-        # Sample date window: replace with a user-selected date range for production.
+        # GSC data may be delayed. Default to the previous 28-day window ending three days ago.
+        end = end_date or (date.today() - timedelta(days=3))
+        start = start_date or (end - timedelta(days=27))
+        if start >= end:
+            return [], "Start date must be earlier than end date."
+        property_value = property_id or _setting("GSC_PROPERTY", site_url)
         result = service.searchanalytics().query(
-            siteUrl=property_id,
-            body={"startDate": "2026-10-01", "endDate": "2026-10-31",
-                  "dimensions": ["query"], "rowLimit": 100}
+            siteUrl=property_value,
+            body={
+                "startDate": start.isoformat(),
+                "endDate": end.isoformat(),
+                "dimensions": ["query", "page"],
+                "rowLimit": min(max(int(row_limit), 1), 25000),
+            },
         ).execute()
-        return result.get("rows", []), (
-            f"Connected to Search Console property {property_id}. "
-            "Showing the configured sample date window."
-        )
+        return result.get("rows", []), f"Connected to Search Console property {property_value} for {start} through {end}."
     except Exception as exc:
         return [], f"GSC connection failed: {exc}"
 
@@ -68,13 +65,9 @@ def ai_recommendations(site_url, audit, context=""):
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.2
+                temperature=0.2,
             )
-            items = [
-                line.strip("- ").strip()
-                for line in response.choices[0].message.content.splitlines()
-                if line.strip()
-            ]
+            items = [line.strip("- ").strip() for line in response.choices[0].message.content.splitlines() if line.strip()]
             return items, "Generated using the configured OpenAI API."
         except Exception as exc:
             return [f"AI provider error: {exc}"], "AI request failed."
@@ -83,5 +76,5 @@ def ai_recommendations(site_url, audit, context=""):
         "Add useful meta descriptions to important landing pages; evaluate CTR changes in Search Console.",
         "Ensure each indexable page has one descriptive H1 and a logical heading structure.",
         "Add meaningful alt text to informative images; keep decorative images appropriately empty.",
-        "Prioritize high-impression, low-CTR queries using Search Console page and query exports."
+        "Prioritize high-impression, low-CTR queries using Search Console page and query exports.",
     ], "Showing rule-based recommendations. Configure OPENAI_API_KEY for generated recommendations."
