@@ -38,13 +38,13 @@ def test_rejects_hostname_with_any_non_public_dns_answer(monkeypatch):
     ]
     monkeypatch.setattr(url_safety.socket, "getaddrinfo", lambda *a, **k: answers)
     with pytest.raises(url_safety.URLSafetyError, match="non-public"):
-        url_safety.validate_public_url("https://mixed.example/")
+        url_safety.validate_public_url("https://mixed.example.com/")
 
 
 def test_rejects_non_web_ports_credentials_and_non_http_schemes():
     candidates = (
-        "http://public.example:8080/",
-        "https://user:pass@public.example/",
+        "http://public.example.com:8080/",
+        "https://user:pass@public.example.com/",
         "file:///etc/passwd",
         "javascript:alert(1)",
     )
@@ -72,7 +72,7 @@ def test_http_connection_uses_pinned_ip(monkeypatch):
 
     monkeypatch.setattr(url_safety.urllib3_connection, "create_connection", fake_create_connection)
     connection = url_safety._PinnedHTTPConnection(
-        host="public.example", port=80, pinned_ip="8.8.8.8", timeout=3
+        host="public.example.com", port=80, pinned_ip="8.8.8.8", timeout=3
     )
     connection._new_conn()
     assert destinations == [("8.8.8.8", 80)]
@@ -113,8 +113,8 @@ def test_redirect_to_private_ip_is_blocked_before_second_request(monkeypatch):
 
     monkeypatch.setattr(url_safety.requests, "Session", FakeSession)
     with pytest.raises(url_safety.URLSafetyError):
-        url_safety.safe_fetch("https://public.example/start")
-    assert requests_made == ["https://public.example/start"]
+        url_safety.safe_fetch("https://public.example.com/start")
+    assert requests_made == ["https://public.example.com/start"]
 
 
 def test_safe_fetch_enforces_body_limit(monkeypatch):
@@ -150,4 +150,4 @@ def test_safe_fetch_enforces_body_limit(monkeypatch):
 
     monkeypatch.setattr(url_safety.requests, "Session", FakeSession)
     with pytest.raises(url_safety.URLSafetyError, match="response size"):
-        url_safety.safe_fetch("https://public.example/", max_bytes=5)
+        url_safety.safe_fetch("https://public.example.com/", max_bytes=5)
