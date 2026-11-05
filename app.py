@@ -2,11 +2,22 @@ import pandas as pd
 import streamlit as st
 from datetime import date, timedelta
 
-from src.db import (
-    init_db, add_project, list_projects, save_keywords, get_keywords,
-    save_keyword_mappings, remove_legacy_keyword_ideas, count_legacy_keyword_ideas,
-    save_gsc_rows, get_latest_gsc_rows, save_audit, get_latest_audit,
-)
+# Import the database module itself so optional helpers added in newer
+# deployments do not break app startup while Streamlit Cloud is refreshing files.
+from src import db as db_module
+
+init_db = db_module.init_db
+add_project = db_module.add_project
+list_projects = db_module.list_projects
+save_keywords = db_module.save_keywords
+get_keywords = db_module.get_keywords
+save_keyword_mappings = db_module.save_keyword_mappings
+save_gsc_rows = db_module.save_gsc_rows
+get_latest_gsc_rows = db_module.get_latest_gsc_rows
+save_audit = db_module.save_audit
+get_latest_audit = db_module.get_latest_audit
+count_legacy_keyword_ideas = getattr(db_module, "count_legacy_keyword_ideas", lambda project_id: 0)
+remove_legacy_keyword_ideas = getattr(db_module, "remove_legacy_keyword_ideas", lambda project_id: 0)
 from src.seo import audit_url
 from src.keywords import expand_keywords, detect_cannibalization, cluster_keywords
 from src.gsc import parse_gsc_csv, gsc_api_rows_to_frame
