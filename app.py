@@ -4,11 +4,11 @@ from datetime import date, timedelta
 
 from src.db import (
     init_db, add_project, list_projects, save_keywords, get_keywords,
-    save_keyword_mappings, save_gsc_rows, get_latest_gsc_rows,
-    save_audit, get_latest_audit,
+    save_keyword_mappings, remove_legacy_keyword_ideas, count_legacy_keyword_ideas,
+    save_gsc_rows, get_latest_gsc_rows, save_audit, get_latest_audit,
 )
 from src.seo import audit_url
-from src.keywords import expand_keywords, detect_cannibalization
+from src.keywords import expand_keywords, detect_cannibalization, cluster_keywords
 from src.gsc import parse_gsc_csv, gsc_api_rows_to_frame
 from src.competitors import compare_domains, content_gap
 from src.reports import build_report
@@ -59,14 +59,14 @@ with tabs[0]:
     c3.metric("Latest GSC rows", len(gsc_rows))
     c4.metric("Workspace", "Multi-site")
     st.markdown("#### Suggested workflow")
-    st.write("Generate natural keyword ideas → map them to landing pages → import Search Console query/page data → review opportunities and possible cannibalization.")
+    st.write("Generate natural keyword ideas → map them to landing pages → import Search Console query/page data → review query clusters and possible cannibalization.")
     if audit:
         st.markdown("#### Latest technical audit")
         st.json(audit["summary"])
 
 with tabs[1]:
     st.markdown("#### Keyword Research Engine v2.0")
-    st.caption("Natural phrase patterns, intent classification, seed-based clusters and editable landing-page mapping. No search-volume or difficulty estimates are invented.")
+    st.caption("Natural phrase patterns, intent classification, seed-based clusters and editable landing-page mapping. Search volume and difficulty are never invented.")
     seeds = st.text_area(
         "Seed keywords (one per line or comma-separated)",
         placeholder="molarity calculator\nresearch methodology builder\nacademic citation generator",
@@ -80,6 +80,15 @@ with tabs[1]:
         else:
             st.warning("Enter at least one seed keyword.")
 
+    legacy_count = count_legacy_keyword_ideas(pid)
+    if legacy_count:
+        with st.expander(f"Older v1 generated phrases ({legacy_count})"):
+            st.warning("These were created by the earlier mechanical modifier generator. Seed terms are not included in this cleanup.")
+            if st.button("Remove outdated v1 generated variations", key=f"cleanup_legacy_{pid}"):
+                removed = remove_legacy_keyword_ideas(pid)
+                st.success(f"Removed {removed} old auto-generated variations. Your seed keywords and any v2 phrases remain.")
+                st.rerun()
+
     rows = get_keywords(pid)
     if rows:
         frame = pd.DataFrame(rows)
@@ -90,9 +99,7 @@ with tabs[1]:
         metric3.metric("Mapped to a page", int(frame["target_url"].fillna("").str.strip().ne("").sum()))
         editable = frame[["keyword", "intent", "cluster", "target_url"]].copy()
         edited = st.data_editor(
-            editable,
-            use_container_width=True,
-            hide_index=True,
+            editable, use_container_width=True, hide_index=True,
             disabled=["keyword", "intent", "cluster"],
             column_config={
                 "keyword": st.column_config.TextColumn("Keyword", width="large"),
@@ -106,7 +113,6 @@ with tabs[1]:
             save_keyword_mappings(pid, edited.to_dict(orient="records"))
             st.success("Landing-page mappings saved.")
             st.rerun()
-
         st.markdown("#### Keyword clusters")
         clusters = frame.groupby("cluster", dropna=False).agg(
             keyword_count=("keyword", "count"),
@@ -175,7 +181,7 @@ with tabs[4]:
         gsc_frame = pd.DataFrame(latest_gsc)
         st.markdown("#### Latest Search Console import")
         summary1, summary2, summary3 = st.columns(3)
-        summary1.metric("Queries / page rows", len(gsc_frame))
+        summary1.metric("Query / page rows", len(gsc_frame))
         summary2.metric("Total clicks", f"{gsc_frame['clicks'].fillna(0).sum():,.0f}")
         summary3.metric("Total impressions", f"{gsc_frame['impressions'].fillna(0).sum():,.0f}")
         display_frame = gsc_frame.copy()
@@ -183,6 +189,15 @@ with tabs[4]:
         st.dataframe(display_frame, use_container_width=True, hide_index=True)
         csv_data = gsc_frame.to_csv(index=False).encode("utf-8-sig")
         st.download_button("Download normalized GSC data", csv_data, "gsc-query-page-data.csv", "text/csv")
+
+        st.markdown("#### Search query clusters")
+        query_clusters = pd.DataFrame(cluster_keywords(gsc_frame["query"].dropna().tolist(), similarity_threshold=0.4))
+        if not query_clusters.empty:
+            query_summary = query_clusters.groupby(["cluster_id", "cluster"], as_index=False).agg(
+                query_count=("keyword", "count"),
+            ).rename(columns={"cluster": "Cluster topic"})
+            st.dataframe(query_summary, use_container_width=True, hide_index=True)
+        st.caption("These are approximate lexical groupings to help review topic themes, not semantic intent judgments.")
 
         st.markdown("#### Possible keyword cannibalization")
         findings = detect_cannibalization(latest_gsc)
