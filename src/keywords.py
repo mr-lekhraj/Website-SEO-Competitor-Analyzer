@@ -12,7 +12,7 @@ INFO_MARKERS = (
     "what is", "how to", "how does", "formula", "definition", "meaning",
     "examples", "explained", "guide", "tutorial", "steps", "vs ", "difference between",
 )
-COMMERCIAL_MARKERS = ("best ", "top ", "review", "reviews", "comparison", "compare", "alternative", "alternatives")
+COMMERCIAL_MARKERS = ("best ", "top ", "comparison", "compare", "alternative", "alternatives")
 TRANSACTIONAL_MARKERS = ("online", "free", "download", "use online", "tool", "calculator", "template", "generator")
 STOP_WORDS = {"a", "an", "and", "for", "in", "of", "on", "the", "to", "with", "by"}
 
@@ -29,7 +29,7 @@ def tokenize(value: str) -> set[str]:
 
 def infer_intent(keyword: str) -> str:
     phrase = f" {normalize_keyword(keyword)} "
-    if any(marker in phrase for marker in COMMERCIAL_MARKERS):
+    if any(marker in phrase for marker in COMMERCIAL_MARKERS) or re.search(r"\breviews?\s+(of|for|vs|versus)\b", phrase):
         return "Commercial"
     if any(marker in phrase for marker in INFO_MARKERS):
         return "Informational"
@@ -69,6 +69,12 @@ def _candidate_phrases(seed: str) -> list[str]:
             f"{concept} builder online", f"free {concept} builder",
             f"how to create {concept}", f"{concept} examples", f"{concept} template",
         ])
+    elif "tool" in base:
+        candidates.extend([
+            f"{concept} tools", f"{concept} software", f"free {concept} tools",
+            f"best {concept} tools", f"online {concept} tools",
+            f"how to use {concept} tools", f"{concept} tools comparison",
+        ])
     else:
         candidates.extend([
             f"what is {base}", f"how to use {base}", f"{base} guide",
@@ -107,6 +113,7 @@ def expand_keywords(seed_text: str, target_url: str = "") -> list[dict]:
 
 
 def cluster_keywords(keywords: list[str], similarity_threshold: float = 0.5) -> list[dict]:
+    """Greedy lexical clusters for imported queries; no ML or external API required."""
     normalized = list(dict.fromkeys(normalize_keyword(x) for x in keywords if normalize_keyword(x)))
     clusters: list[dict] = []
     for phrase in normalized:
@@ -132,6 +139,7 @@ def cluster_keywords(keywords: list[str], similarity_threshold: float = 0.5) -> 
 
 
 def detect_cannibalization(rows: list[dict], min_impressions: int = 1) -> list[dict]:
+    """Flag queries getting impressions from multiple landing pages in supplied GSC data."""
     grouped = defaultdict(lambda: {"pages": set(), "clicks": 0.0, "impressions": 0.0})
     for row in rows:
         query = normalize_keyword(row.get("query") or row.get("keyword") or "")
