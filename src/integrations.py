@@ -1,28 +1,62 @@
 import os
 
+
+def _setting(name, default=None):
+    """Read Streamlit Cloud secrets first, then local environment variables."""
+    try:
+        import streamlit as st
+        value = st.secrets.get(name, default)
+        if value not in (None, ""):
+            return value
+    except Exception:
+        # Streamlit secrets may be unavailable during local tests or CLI use.
+        pass
+    return os.getenv(name, default)
+
+
 def load_gsc_rows(site_url):
-    credential_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not credential_path:
-        return [], "GSC is not configured. Upload a CSV export or set GOOGLE_APPLICATION_CREDENTIALS."
+    credential_path = _setting("GOOGLE_APPLICATION_CREDENTIALS")
+    service_account_info = _setting("gcp_service_account")
+    if not credential_path and not service_account_info:
+        return [], (
+            "GSC is not configured. Upload a CSV export, set "
+            "GOOGLE_APPLICATION_CREDENTIALS locally, or add a [gcp_service_account] "
+            "object to Streamlit secrets."
+        )
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-        credentials = service_account.Credentials.from_service_account_file(
-            credential_path,
-            scopes=["https://www.googleapis.com/auth/webmasters.readonly"]
-        )
+
+        scopes = ["https://www.googleapis.com/auth/webmasters.readonly"]
+        if service_account_info:
+            credentials = service_account.Credentials.from_service_account_info(
+                dict(service_account_info), scopes=scopes
+            )
+        else:
+            credentials = service_account.Credentials.from_service_account_file(
+                credential_path, scopes=scopes
+            )
+
         service = build("searchconsole", "v1", credentials=credentials, cache_discovery=False)
+        # The property can be overridden for Domain properties, e.g. sc-domain:example.com.
+        property_id = _setting("GSC_PROPERTY", site_url)
         # Sample date window: replace with a user-selected date range for production.
         result = service.searchanalytics().query(
-            siteUrl=site_url,
-            body={"startDate":"2026-10-01","endDate":"2026-10-31","dimensions":["query"],"rowLimit":100}
+            siteUrl=property_id,
+            body={"startDate": "2026-10-01", "endDate": "2026-10-31",
+                  "dimensions": ["query"], "rowLimit": 100}
         ).execute()
-        return result.get("rows", []), "Connected to Search Console. Showing the configured sample date window."
+        return result.get("rows", []), (
+            f"Connected to Search Console property {property_id}. "
+            "Showing the configured sample date window."
+        )
     except Exception as exc:
         return [], f"GSC connection failed: {exc}"
 
+
 def ai_recommendations(site_url, audit, context=""):
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = _setting("OPENAI_API_KEY")
+    model = _setting("OPENAI_MODEL", "gpt-4.1-mini")
     if api_key and audit:
         try:
             from openai import OpenAI
@@ -32,11 +66,15 @@ def ai_recommendations(site_url, audit, context=""):
                 f"Audit data: {audit}. Context: {context}. Do not invent traffic or rankings."
             )
             response = client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-                messages=[{"role":"user","content":prompt}],
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.2
             )
-            items = [line.strip("- ").strip() for line in response.choices[0].message.content.splitlines() if line.strip()]
+            items = [
+                line.strip("- ").strip()
+                for line in response.choices[0].message.content.splitlines()
+                if line.strip()
+            ]
             return items, "Generated using the configured OpenAI API."
         except Exception as exc:
             return [f"AI provider error: {exc}"], "AI request failed."
