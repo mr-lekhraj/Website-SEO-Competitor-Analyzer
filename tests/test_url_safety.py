@@ -151,3 +151,15 @@ def test_safe_fetch_enforces_body_limit(monkeypatch):
     monkeypatch.setattr(url_safety.requests, "Session", FakeSession)
     with pytest.raises(url_safety.URLSafetyError, match="response size"):
         url_safety.safe_fetch("https://public.example.com/", max_bytes=5)
+
+
+def test_pinned_pool_manager_keeps_ip_out_of_pool_key(monkeypatch):
+    manager = url_safety._PinnedPoolManager(pinned_ip="8.8.8.8")
+    pool = manager.connection_from_host(
+        "public.example.com",
+        port=80,
+        scheme="http",
+    )
+    assert pool.conn_kw["pinned_ip"] == "8.8.8.8"
+    assert pool.ConnectionCls is url_safety._PinnedHTTPConnection
+    manager.clear()
