@@ -2,17 +2,27 @@
 
 A multi-website SEO research workspace built with Python and Streamlit.
 
-## Included in this starter release
+## Keyword Research Engine v2.0
+- Natural phrase patterns for calculator, generator, builder and general research seeds
+- Rule-based search-intent labels (Informational, Commercial, Transactional, Mixed)
+- Seed-based keyword clustering
+- Editable keyword-to-landing-page mapping
+- Search Console CSV normalization for common Query / Top queries and optional Page exports
+- Query + page cannibalization review flags based on Search Console data
+- Persistent GSC query/page imports with clicks, impressions, CTR, position, source and import history
+- CSV exports for keyword inventory and normalized GSC data
+
+The keyword generator produces ideas, not validated demand estimates. Search volume, keyword difficulty and CPC remain blank until connected to a real keyword-data provider. GSC performance metrics are sourced only from uploaded exports or an authorized Search Console connection.
+
+## Other modules
 - Multi-website project workspace backed by SQLite
-- Seed keyword expansion with search-intent labels
-- Public competitor page metadata comparison
-- Content-gap comparison from supplied topic/URL lists
+- Competitor page metadata comparison
+- Content-gap comparison from supplied topic / URL lists
 - Technical/on-page audit: HTTP status, HTTPS, title, meta description, H1, canonical, robots meta, image alt, internal links and viewport
-- Google Search Console CSV import and optional service-account API connection
-- Backlink and keyword-rank CSV import foundations
+- Backlink and rank-tracking CSV preview foundations
 - Optional AI recommendations through OpenAI API
 - Markdown report export
-- GitHub Actions test workflow
+- GitHub Actions tests
 
 ## Quick start
 ```bash
@@ -24,50 +34,28 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Add websites from the sidebar. Local data is stored in `data/seo_analyzer.db`.
+## Streamlit Community Cloud
+1. Open https://share.streamlit.io/ and sign in with GitHub.
+2. Create an app from `mr-lekhraj/Website-SEO-Competitor-Analyzer`, branch `main`, entrypoint `app.py`.
+3. Configure optional API credentials in the app's Settings → Secrets. Never commit keys.
+4. This starter has no user authentication and SQLite data is shared by viewers of the same deployment. Keep the deployed app private and do not enter sensitive client data.
 
-## Streamlit Community Cloud deployment
-1. Open [Streamlit Community Cloud](https://share.streamlit.io/) and sign in with GitHub.
-2. Choose **Create app**.
-3. Select repository `mr-lekhraj/Website-SEO-Competitor-Analyzer`, branch `main`, and entrypoint `app.py`.
-4. Open **Advanced settings** if you need to add API secrets, then deploy.
-5. Because this starter app has no user authentication and its SQLite database is shared by all viewers of the same app instance, keep the deployed app private and restrict viewer access. Do not use a public deployment for private client or business data.
+## Google Search Console
+Upload a CSV with `Top queries` / `Query` and optionally `Page`, `Clicks`, `Impressions`, `CTR`, `Position`. The importer normalizes headers, removes empty query rows, parses percentages and retains query/page pairs for possible cannibalization review.
 
-## API configuration
-For local use, copy `.env.example` to `.env` and set environment variables. For Streamlit Cloud, use the app's **Settings → Secrets** panel instead of committing keys.
+For API access, enable the Search Console API, create a Google Cloud service account, grant it access to the relevant Search Console property, and add its JSON fields under `[gcp_service_account]` in Streamlit Secrets. Set the property field in the GSC tab. API requests use query + page dimensions and default to a recent 28-day period ending three days before today; the date range can be selected in the app.
 
-Example secrets structure (replace placeholders locally in the Streamlit secrets UI; never commit real credentials):
+## Optional AI recommendations
+Set `OPENAI_API_KEY` and optionally `OPENAI_MODEL` in Streamlit Secrets or environment variables.
 
-```toml
-OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
-OPENAI_MODEL = "gpt-4.1-mini"
-GSC_PROPERTY = "https://www.example.com/"
+## Data integrity and limitations
+- Modifier-based suggestions and intent labels are heuristics, not Google volume / KD / SERP data.
+- Multiple ranking URLs for one query are only a review signal, not automatically a cannibalization problem.
+- Competitor comparison inspects public page metadata; it does not infer competitor traffic.
+- Backlink and rank CSVs are currently preview-only; provider adapters and historical tracking remain future work.
+- SQLite is a lightweight prototype store, not a production multi-user database.
 
-[gcp_service_account]
-type = "service_account"
-project_id = "YOUR_GOOGLE_CLOUD_PROJECT"
-private_key_id = "YOUR_PRIVATE_KEY_ID"
-private_key = "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n"
-client_email = "YOUR_SERVICE_ACCOUNT_EMAIL"
-client_id = "YOUR_CLIENT_ID"
-token_uri = "https://oauth2.googleapis.com/token"
-```
-
-For Google Search Console:
-1. Enable the Search Console API in Google Cloud.
-2. Create a service account and add its email as a user on the Search Console property.
-3. Add the service-account JSON fields under the `[gcp_service_account]` section of Streamlit secrets.
-4. Set `GSC_PROPERTY` to the exact Search Console property identifier. A Domain property uses a value such as `sc-domain:example.com`; a URL-prefix property uses its full URL.
-5. The current API example uses a fixed sample date window in `src/integrations.py`; a date-range selector is planned.
-
-## Data integrity
-Keyword volume, difficulty, live rankings and backlink metrics are not fabricated. Keyword suggestions are modifier-based ideas. Connect a real data provider or import provider exports to obtain those metrics. Competitor comparison reads publicly accessible page metadata; it does not estimate competitor traffic.
-
-## Current limitations
-GSC API date range is currently a sample window. Backlink and rank CSVs are currently previewed rather than stored as historical time series. Automated scheduled reporting, authentication, PDF/XLSX exports and commercial SEO-provider adapters are roadmap items. The SQLite database is a lightweight starter store and is not a production multi-user database.
-
-## Security and responsible use
-Respect robots.txt, website terms and provider API limits. Use low request rates. Do not crawl private or authenticated content. Store secrets in environment variables or deployment secrets, not source control. This starter does not include user authentication, project-level authorization, or production-grade persistence.
+Respect robots.txt, site terms and API limits. Store secrets only in environment variables or deployment secrets.
 
 ## License
-MIT. See [LICENSE](LICENSE).
+MIT.
