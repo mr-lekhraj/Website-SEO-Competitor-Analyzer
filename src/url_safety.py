@@ -14,6 +14,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3 import PoolManager
+from urllib3.poolmanager import pool_classes_by_scheme
 from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import NewConnectionError
@@ -85,12 +86,15 @@ def _normalize_and_resolve(url: str) -> tuple[str, str, int, str]:
 
     try:
         literal_ip = ipaddress.ip_address(host)
+    except ValueError:
+        literal_ip = None
+
+    if literal_ip is not None:
         _public_ip(str(literal_ip))
         pinned_ip = str(literal_ip)
         normalized_host = f"[{host}]" if literal_ip.version == 6 else host
-    except ValueError:
-        # ValueError can mean either "not an IP literal" or an unsafe literal.
-        # Do not accidentally reinterpret an unsafe IP literal as a DNS name.
+    else:
+        # Do not reinterpret malformed numeric IPv4 forms as DNS names.
         if all(char.isdigit() or char == "." for char in host):
             raise URLSafetyError("The IP address in the URL is invalid or not public.")
         try:
@@ -172,7 +176,7 @@ class _PinnedHTTPSConnectionPool(HTTPSConnectionPool):
 
 class _PinnedPoolManager(PoolManager):
     pool_classes_by_scheme = {
-        **PoolManager.pool_classes_by_scheme,
+        **pool_classes_by_scheme,
         "http": _PinnedHTTPConnectionPool,
         "https": _PinnedHTTPSConnectionPool,
     }
