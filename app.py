@@ -69,7 +69,7 @@ with tabs[1]:
     st.caption("Natural phrase patterns, intent classification, seed-based clusters and editable landing-page mapping. No search-volume or difficulty estimates are invented.")
     seeds = st.text_area(
         "Seed keywords (one per line or comma-separated)",
-        placeholder="molarity calculator\\nresearch methodology builder\\nacademic citation generator",
+        placeholder="molarity calculator\nresearch methodology builder\nacademic citation generator",
         height=130,
     )
     if st.button("Generate v2 keyword ideas", type="primary"):
