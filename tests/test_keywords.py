@@ -36,3 +36,15 @@ def test_detect_cannibalization_flags_same_query_across_two_pages():
     assert len(result) == 1
     assert result[0]["query"] == "molarity calculator"
     assert result[0]["page_count"] == 2
+
+
+def test_literature_review_phrase_is_not_auto_classified_commercial():
+    assert infer_intent("how to use literature review assistant") == "Informational"
+    assert infer_intent("literature review assistant alternatives") == "Commercial"
+
+
+def test_tool_seed_creates_grammatical_variants():
+    phrases = {row["keyword"] for row in expand_keywords("data cleaning tool")}
+    assert "data cleaning tools" in phrases
+    assert "free data cleaning tools" in phrases
+    assert "what is data cleaning tool" not in phrases
